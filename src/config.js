@@ -3,6 +3,7 @@ require('dotenv').config();
 module.exports = {
     port: process.env.PORT || 3000,
     authToken: process.env.SERVIENTREGA_AUTH_TOKEN,
+    authTokenSecondary: process.env.SERVIENTREGA_AUTH_TOKEN_SECONDARY || null,
     db: {
         host:     process.env.DB_HOST     || '127.0.0.1',
         port:     process.env.DB_PORT     || 3306,

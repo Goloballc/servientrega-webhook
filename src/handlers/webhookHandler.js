@@ -1,3 +1,4 @@
+const config = require('../config');
 const { upsertShipmentAndEvent } = require('../db/shipmentRepo');
 const { resolveState, isDelivered } = require('../stateMap');
 
@@ -50,6 +51,39 @@ function parsePayload(payload) {
 }
 
 /**
+ * Notifica a Bagisto que una guia fue entregada, para que actualice
+ * shipments.status localmente sin depender de una consulta posterior.
+ * No debe bloquear ni afectar la respuesta 200 al webhook de Servientrega
+ * si Bagisto no responde o esta caido: solo se loguea el error.
+ */
+async function notifyBagistoDelivery(numeroGuia) {
+    if (!config.bagistoCallbackUrl || !config.bagistoCallbackToken) {
+        console.warn('[webhookHandler] BAGISTO_CALLBACK_URL/TOKEN no configurados — se omite notificacion a Bagisto');
+        return;
+    }
+
+    try {
+        const response = await fetch(config.bagistoCallbackUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-servientrega-callback-token': config.bagistoCallbackToken,
+            },
+            body: JSON.stringify({ numero_guia: numeroGuia }),
+            signal: AbortSignal.timeout(5000),
+        });
+
+        if (!response.ok) {
+            console.error(`[webhookHandler] Callback a Bagisto respondio ${response.status} para guia ${numeroGuia}`);
+        } else {
+            console.log(`[webhookHandler] Bagisto notificado — guia ${numeroGuia} marcada como entregada`);
+        }
+    } catch (err) {
+        console.error(`[webhookHandler] Error al notificar a Bagisto para guia ${numeroGuia}:`, err.message);
+    }
+}
+
+/**
  * Maneja la recepción del webhook de Servientrega.
  */
 async function handleWebhook(req, res) {
@@ -67,6 +101,12 @@ async function handleWebhook(req, res) {
         const { shipmentData, eventData } = parsePayload(payload);
         await upsertShipmentAndEvent(shipmentData, eventData);
         console.log(`[webhookHandler] Guía ${shipmentData.numeroGuia} procesada — estado: ${shipmentData.nombreEstadoGoloba}`);
+
+        if (isDelivered(eventData.idProcesoLogistico)) {
+            // No se espera (await) de forma bloqueante para la respuesta al webhook,
+            // pero sí se deja corriendo para que el log de éxito/error quede registrado.
+            notifyBagistoDelivery(shipmentData.numeroGuia);
+        }
     } catch (err) {
         console.error('[webhookHandler] Error al persistir payload:', err);
         // Respondemos 200 de todas formas para no provocar reintentos de Servientrega

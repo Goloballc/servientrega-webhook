@@ -4,6 +4,8 @@ module.exports = {
     port: process.env.PORT || 3000,
     authToken: process.env.SERVIENTREGA_AUTH_TOKEN,
     authTokenSecondary: process.env.SERVIENTREGA_AUTH_TOKEN_SECONDARY || null,
+    bagistoCallbackUrl: process.env.BAGISTO_CALLBACK_URL || null,
+    bagistoCallbackToken: process.env.BAGISTO_CALLBACK_TOKEN || null,
     db: {
         host:     process.env.DB_HOST     || '127.0.0.1',
         port:     process.env.DB_PORT     || 3306,
